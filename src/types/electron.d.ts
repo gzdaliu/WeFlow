@@ -719,7 +719,9 @@ export interface ElectronAPI {
       format: 'json' | 'html' | 'arkmejson'
       usernames?: string[]
       keyword?: string
-      exportMedia?: boolean
+      exportImages?: boolean
+      exportLivePhotos?: boolean
+      exportVideos?: boolean
       startTime?: number
       endTime?: number
       taskId?: string

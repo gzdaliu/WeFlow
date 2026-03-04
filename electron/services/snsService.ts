@@ -1085,13 +1085,30 @@ class SnsService {
         usernames?: string[]
         keyword?: string
         exportMedia?: boolean
+        exportImages?: boolean
+        exportLivePhotos?: boolean
+        exportVideos?: boolean
         startTime?: number
         endTime?: number
     }, progressCallback?: (progress: { current: number; total: number; status: string }) => void, control?: {
         shouldPause?: () => boolean
         shouldStop?: () => boolean
     }): Promise<{ success: boolean; filePath?: string; postCount?: number; mediaCount?: number; paused?: boolean; stopped?: boolean; error?: string }> {
-        const { outputDir, format, usernames, keyword, exportMedia = false, startTime, endTime } = options
+        const { outputDir, format, usernames, keyword, startTime, endTime } = options
+        const hasExplicitMediaSelection =
+            typeof options.exportImages === 'boolean' ||
+            typeof options.exportLivePhotos === 'boolean' ||
+            typeof options.exportVideos === 'boolean'
+        const shouldExportImages = hasExplicitMediaSelection
+            ? options.exportImages === true
+            : options.exportMedia === true
+        const shouldExportLivePhotos = hasExplicitMediaSelection
+            ? options.exportLivePhotos === true
+            : options.exportMedia === true
+        const shouldExportVideos = hasExplicitMediaSelection
+            ? options.exportVideos === true
+            : options.exportMedia === true
+        const shouldExportMedia = shouldExportImages || shouldExportLivePhotos || shouldExportVideos
         const getControlState = (): 'paused' | 'stopped' | null => {
             if (control?.shouldStop?.()) return 'stopped'
             if (control?.shouldPause?.()) return 'paused'
@@ -1149,15 +1166,54 @@ class SnsService {
             let mediaCount = 0
             const mediaDir = join(outputDir, 'media')
 
-            if (exportMedia) {
+            if (shouldExportMedia) {
                 if (!existsSync(mediaDir)) {
                     mkdirSync(mediaDir, { recursive: true })
                 }
 
                 // 收集所有媒体下载任务
-                const mediaTasks: { media: SnsMedia; postId: string; mi: number }[] = []
+                const mediaTasks: Array<{
+                    kind: 'image' | 'video' | 'livephoto'
+                    media: SnsMedia
+                    url: string
+                    key?: string
+                    postId: string
+                    mi: number
+                }> = []
                 for (const post of allPosts) {
-                    post.media.forEach((media, mi) => mediaTasks.push({ media, postId: post.id, mi }))
+                    post.media.forEach((media, mi) => {
+                        const isVideo = isVideoUrl(media.url)
+                        if (shouldExportImages && !isVideo && media.url) {
+                            mediaTasks.push({
+                                kind: 'image',
+                                media,
+                                url: media.url,
+                                key: media.key,
+                                postId: post.id,
+                                mi
+                            })
+                        }
+                        if (shouldExportVideos && isVideo && media.url) {
+                            mediaTasks.push({
+                                kind: 'video',
+                                media,
+                                url: media.url,
+                                key: media.key,
+                                postId: post.id,
+                                mi
+                            })
+                        }
+                        if (shouldExportLivePhotos && media.livePhoto?.url) {
+                            mediaTasks.push({
+                                kind: 'livephoto',
+                                media,
+                                url: media.livePhoto.url,
+                                key: media.livePhoto.key || media.key,
+                                postId: post.id,
+                                mi
+                            })
+                        }
+                    })
                 }
 
                 // 并发下载（5路）
@@ -1166,29 +1222,42 @@ class SnsService {
                 const runTask = async (task: typeof mediaTasks[0]) => {
                     const { media, postId, mi } = task
                     try {
-                        const isVideo = isVideoUrl(media.url)
+                        const isVideo = task.kind === 'video' || task.kind === 'livephoto' || isVideoUrl(task.url)
                         const ext = isVideo ? 'mp4' : 'jpg'
-                        const fileName = `${postId}_${mi}.${ext}`
+                        const suffix = task.kind === 'livephoto' ? '_live' : ''
+                        const fileName = `${postId}_${mi}${suffix}.${ext}`
                         const filePath = join(mediaDir, fileName)
 
                         if (existsSync(filePath)) {
-                            ;(media as any).localPath = `media/${fileName}`
+                            if (task.kind === 'livephoto') {
+                                if (media.livePhoto) (media.livePhoto as any).localPath = `media/${fileName}`
+                            } else {
+                                ;(media as any).localPath = `media/${fileName}`
+                            }
                             mediaCount++
                         } else {
-                            const result = await this.fetchAndDecryptImage(media.url, media.key)
+                            const result = await this.fetchAndDecryptImage(task.url, task.key)
                             if (result.success && result.data) {
                                 await writeFile(filePath, result.data)
-                                ;(media as any).localPath = `media/${fileName}`
+                                if (task.kind === 'livephoto') {
+                                    if (media.livePhoto) (media.livePhoto as any).localPath = `media/${fileName}`
+                                } else {
+                                    ;(media as any).localPath = `media/${fileName}`
+                                }
                                 mediaCount++
                             } else if (result.success && result.cachePath) {
                                 const cachedData = await readFile(result.cachePath)
                                 await writeFile(filePath, cachedData)
-                                ;(media as any).localPath = `media/${fileName}`
+                                if (task.kind === 'livephoto') {
+                                    if (media.livePhoto) (media.livePhoto as any).localPath = `media/${fileName}`
+                                } else {
+                                    ;(media as any).localPath = `media/${fileName}`
+                                }
                                 mediaCount++
                             }
                         }
                     } catch (e) {
-                        console.warn(`[SnsExport] 媒体下载失败: ${task.media.url}`, e)
+                        console.warn(`[SnsExport] 媒体下载失败: ${task.url}`, e)
                     }
                     done++
                     progressCallback?.({ current: done, total: mediaTasks.length, status: `正在下载媒体 (${done}/${mediaTasks.length})...` })
@@ -1323,7 +1392,12 @@ class SnsService {
                         media: post.media.map(m => ({
                             url: m.url,
                             thumb: m.thumb,
-                            localPath: (m as any).localPath || undefined
+                            localPath: (m as any).localPath || undefined,
+                            livePhoto: m.livePhoto ? {
+                                url: m.livePhoto.url,
+                                thumb: m.livePhoto.thumb,
+                                localPath: (m.livePhoto as any).localPath || undefined
+                            } : undefined
                         })),
                         likes: post.likes,
                         comments: post.comments,
@@ -1343,6 +1417,11 @@ class SnsService {
                     exportTime: new Date().toISOString(),
                     format: 'arkmejson',
                     schemaVersion: '1.0.0',
+                    mediaSelection: {
+                        images: shouldExportImages,
+                        livePhotos: shouldExportLivePhotos,
+                        videos: shouldExportVideos
+                    },
                     totalPosts: allPosts.length,
                     filters: {
                         usernames: usernames || [],

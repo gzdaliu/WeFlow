@@ -112,7 +112,9 @@ interface ExportTaskPayload {
   sessionNames: string[]
   snsOptions?: {
     format: SnsTimelineExportFormat
-    exportMedia?: boolean
+    exportImages?: boolean
+    exportLivePhotos?: boolean
+    exportVideos?: boolean
     startTime?: number
     endTime?: number
   }
@@ -878,6 +880,9 @@ function ExportPage() {
   const [exportFolder, setExportFolder] = useState('')
   const [writeLayout, setWriteLayout] = useState<configService.ExportWriteLayout>('A')
   const [snsExportFormat, setSnsExportFormat] = useState<SnsTimelineExportFormat>('html')
+  const [snsExportImages, setSnsExportImages] = useState(false)
+  const [snsExportLivePhotos, setSnsExportLivePhotos] = useState(false)
+  const [snsExportVideos, setSnsExportVideos] = useState(false)
 
   const [options, setOptions] = useState<ExportOptions>({
     format: 'arkme-json',
@@ -2038,7 +2043,6 @@ function ExportPage() {
 
   const buildSnsExportOptions = () => {
     const format: SnsTimelineExportFormat = snsExportFormat
-    const exportMediaEnabled = Boolean(options.exportImages || options.exportVoices || options.exportVideos || options.exportEmojis)
     const dateRange = options.useAllTime
       ? null
       : options.dateRange
@@ -2050,7 +2054,9 @@ function ExportPage() {
 
     return {
       format,
-      exportMedia: exportMediaEnabled,
+      exportImages: snsExportImages,
+      exportLivePhotos: snsExportLivePhotos,
+      exportVideos: snsExportVideos,
       startTime: dateRange?.startTime,
       endTime: dateRange?.endTime
     }
@@ -2159,11 +2165,13 @@ function ExportPage() {
 
     try {
       if (next.payload.scope === 'sns') {
-        const snsOptions = next.payload.snsOptions || { format: 'html' as SnsTimelineExportFormat, exportMedia: false }
+        const snsOptions = next.payload.snsOptions || { format: 'html' as SnsTimelineExportFormat, exportImages: false, exportLivePhotos: false, exportVideos: false }
         const result = await window.electronAPI.sns.exportTimeline({
           outputDir: next.payload.outputDir,
           format: snsOptions.format,
-          exportMedia: snsOptions.exportMedia,
+          exportImages: snsOptions.exportImages,
+          exportLivePhotos: snsOptions.exportLivePhotos,
+          exportVideos: snsOptions.exportVideos,
           startTime: snsOptions.startTime,
           endTime: snsOptions.endTime,
           taskId: next.id
@@ -4414,15 +4422,28 @@ function ExportPage() {
 
               {shouldShowMediaSection && (
                 <div className="dialog-section">
-                  <h4>媒体与头像</h4>
+                  <h4>{exportDialog.scope === 'sns' ? '媒体文件（可多选）' : '媒体与头像'}</h4>
                   <div className="media-check-grid">
-                    <label><input type="checkbox" checked={options.exportImages} onChange={event => setOptions(prev => ({ ...prev, exportImages: event.target.checked }))} /> 图片</label>
-                    <label><input type="checkbox" checked={options.exportVoices} onChange={event => setOptions(prev => ({ ...prev, exportVoices: event.target.checked }))} /> 语音</label>
-                    <label><input type="checkbox" checked={options.exportVideos} onChange={event => setOptions(prev => ({ ...prev, exportVideos: event.target.checked }))} /> 视频</label>
-                    <label><input type="checkbox" checked={options.exportEmojis} onChange={event => setOptions(prev => ({ ...prev, exportEmojis: event.target.checked }))} /> 表情包</label>
-                    <label><input type="checkbox" checked={options.exportVoiceAsText} onChange={event => setOptions(prev => ({ ...prev, exportVoiceAsText: event.target.checked }))} /> 语音转文字</label>
-                    <label><input type="checkbox" checked={options.exportAvatars} onChange={event => setOptions(prev => ({ ...prev, exportAvatars: event.target.checked }))} /> 导出头像</label>
+                    {exportDialog.scope === 'sns' ? (
+                      <>
+                        <label><input type="checkbox" checked={snsExportImages} onChange={event => setSnsExportImages(event.target.checked)} /> 图片</label>
+                        <label><input type="checkbox" checked={snsExportLivePhotos} onChange={event => setSnsExportLivePhotos(event.target.checked)} /> 实况图</label>
+                        <label><input type="checkbox" checked={snsExportVideos} onChange={event => setSnsExportVideos(event.target.checked)} /> 视频</label>
+                      </>
+                    ) : (
+                      <>
+                        <label><input type="checkbox" checked={options.exportImages} onChange={event => setOptions(prev => ({ ...prev, exportImages: event.target.checked }))} /> 图片</label>
+                        <label><input type="checkbox" checked={options.exportVoices} onChange={event => setOptions(prev => ({ ...prev, exportVoices: event.target.checked }))} /> 语音</label>
+                        <label><input type="checkbox" checked={options.exportVideos} onChange={event => setOptions(prev => ({ ...prev, exportVideos: event.target.checked }))} /> 视频</label>
+                        <label><input type="checkbox" checked={options.exportEmojis} onChange={event => setOptions(prev => ({ ...prev, exportEmojis: event.target.checked }))} /> 表情包</label>
+                        <label><input type="checkbox" checked={options.exportVoiceAsText} onChange={event => setOptions(prev => ({ ...prev, exportVoiceAsText: event.target.checked }))} /> 语音转文字</label>
+                        <label><input type="checkbox" checked={options.exportAvatars} onChange={event => setOptions(prev => ({ ...prev, exportAvatars: event.target.checked }))} /> 导出头像</label>
+                      </>
+                    )}
                   </div>
+                  {exportDialog.scope === 'sns' && (
+                    <div className="format-note">全不勾选时仅导出文本信息，不导出媒体文件。</div>
+                  )}
                 </div>
               )}
 

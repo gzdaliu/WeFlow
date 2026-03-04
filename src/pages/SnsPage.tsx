@@ -62,7 +62,9 @@ export default function SnsPage() {
     const [showExportDialog, setShowExportDialog] = useState(false)
     const [exportFormat, setExportFormat] = useState<'json' | 'html' | 'arkmejson'>('html')
     const [exportFolder, setExportFolder] = useState('')
-    const [exportMedia, setExportMedia] = useState(false)
+    const [exportImages, setExportImages] = useState(false)
+    const [exportLivePhotos, setExportLivePhotos] = useState(false)
+    const [exportVideos, setExportVideos] = useState(false)
     const [exportDateRange, setExportDateRange] = useState<{ start: string; end: string }>({ start: '', end: '' })
     const [isExporting, setIsExporting] = useState(false)
     const [exportProgress, setExportProgress] = useState<{ current: number; total: number; status: string } | null>(null)
@@ -950,22 +952,40 @@ export default function SnsPage() {
 
                                     {/* 媒体导出 */}
                                     <div className="export-section">
-                                        <div className="export-toggle-row">
-                                            <div className="toggle-label">
-                                                <Image size={16} />
-                                                <span>导出媒体文件（图片/视频）</span>
-                                            </div>
-                                            <button
-                                                className={`toggle-switch${exportMedia ? ' active' : ''}`}
-                                                onClick={() => !isExporting && setExportMedia(!exportMedia)}
-                                                disabled={isExporting}
-                                            >
-                                                <span className="toggle-knob" />
-                                            </button>
+                                        <label className="export-label">
+                                            <Image size={14} />
+                                            媒体文件（可多选）
+                                        </label>
+                                        <div className="export-media-check-grid">
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={exportImages}
+                                                    onChange={(e) => setExportImages(e.target.checked)}
+                                                    disabled={isExporting}
+                                                />
+                                                图片
+                                            </label>
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={exportLivePhotos}
+                                                    onChange={(e) => setExportLivePhotos(e.target.checked)}
+                                                    disabled={isExporting}
+                                                />
+                                                实况图
+                                            </label>
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={exportVideos}
+                                                    onChange={(e) => setExportVideos(e.target.checked)}
+                                                    disabled={isExporting}
+                                                />
+                                                视频
+                                            </label>
                                         </div>
-                                        {exportMedia && (
-                                            <p className="export-media-hint">媒体文件将保存到输出目录的 media 子目录中，可能需要较长时间</p>
-                                        )}
+                                        <p className="export-media-hint">全不勾选时仅导出文本信息，不导出媒体文件</p>
                                     </div>
 
                                     {/* 同步提示 */}
@@ -1015,7 +1035,9 @@ export default function SnsPage() {
                                                         format: exportFormat,
                                                         usernames: selectedUsernames.length > 0 ? selectedUsernames : undefined,
                                                         keyword: searchKeyword || undefined,
-                                                        exportMedia,
+                                                        exportImages,
+                                                        exportLivePhotos,
+                                                        exportVideos,
                                                         startTime: exportDateRange.start ? Math.floor(new Date(exportDateRange.start).getTime() / 1000) : undefined,
                                                         endTime: exportDateRange.end ? Math.floor(new Date(exportDateRange.end + 'T23:59:59').getTime() / 1000) : undefined
                                                     })
