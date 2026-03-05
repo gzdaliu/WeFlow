@@ -3832,7 +3832,7 @@ function ExportPage() {
       ? '--'
       : typeof displayedMessageCount === 'number'
         ? displayedMessageCount.toLocaleString('zh-CN')
-        : (isLoadingSessionCounts ? '统计中…' : '--')
+        : '获取中'
     return (
       <div className={`contact-row ${checked ? 'selected' : ''}`}>
         <div className="contact-item">
@@ -3910,7 +3910,6 @@ function ExportPage() {
       </div>
     )
   }, [
-    isLoadingSessionCounts,
     lastExportBySession,
     nowTick,
     openSessionDetail,
